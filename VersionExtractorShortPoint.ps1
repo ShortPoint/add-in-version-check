@@ -1,4 +1,4 @@
-﻿# accept required parameters
+# accept required parameters
 <#
 .SYNOPSIS
     .
@@ -36,10 +36,14 @@ Add-Type -Path ($sharePointAssembliesPath + "\Microsoft.SharePoint.Client.Runtim
 Add-Type -Path ($sharePointAssembliesPath + "\Microsoft.SharePoint.Client.dll")
 Add-Type -Path ($sharePointAssembliesPath + "\Microsoft.Online.SharePoint.Client.Tenant.dll")
 
-#Specify tenant admin and site URL
+# Specify tenant admin and site URL
 $global:outputExcelContent = @()
 
-#Global settings
+# Handling throttling
+$Global:_retryCount = 1000
+$Global:_retryInterval = 10
+
+# Global settings
 $host.Runspace.ThreadOptions = "ReuseThread"
 
 # get list of all subsites
@@ -54,7 +58,21 @@ function Get-SPOSubWebs{
 
         $Webs = $RootWeb.Webs 
         $Context.Load($Webs) 
-        $Context.ExecuteQuery() 
+        for($retryAttempts=0; $retryAttempts -lt $Global:_retryCount; $retryAttempts++){
+             Try{
+                    $Context.ExecuteQuery()
+                    break
+                }
+             Catch [system.exception]{
+             if($_.Exception.Response.StatusCode -eq 429)
+              {
+                Start-Sleep -s $Global:_retryInterval
+              }
+              else {
+                break
+              }
+             }
+         } 
  
         ForEach ($sWeb in $Webs) 
         { 
@@ -80,13 +98,27 @@ Param(
         else
         {
             $customUserActions = $Web.UserCustomActions
-              $webId = $Web.Id
+            $webId = $Web.Id
             $WebTitle = $Web.Title
             $WebUrl = $Web.Url
         }
         #$Context.Load($customUserActions, 'Include(ScriptBlock, Sequence)') 
         $Context.Load($customUserActions)
-        $Context.ExecuteQuery() 
+        for($retryAttempts=0; $retryAttempts -lt $Global:_retryCount; $retryAttempts++){
+             Try{
+                    $Context.ExecuteQuery()
+                    break
+                }
+             Catch [system.exception]{
+                      if($_.Exception.Response.StatusCode -eq 429)
+                      {
+                        Start-Sleep -s $Global:_retryInterval
+                      }
+                      else {
+                        break
+                      }
+             }
+         }
  
         ForEach ($customUserAction in $customUserActions) 
         { 
@@ -114,8 +146,8 @@ Param(
                        ShortPointVersion = $shortPointVersionVar.Trim('"')
                                               
                     }
-                # append temp object to global ShortPoint
-                $global:outputExcelContent += $SPTempObj
+                    # append temp object to global ShortPoint
+                    $global:outputExcelContent += $SPTempObj
                 }
             }
         } 
@@ -134,38 +166,123 @@ function Get-SPOTenantSiteCollections
       
         # SPO Client Object Model Context 
         Write-Host "Initializing spoCtx " + $sSiteUrl -foregroundcolor Yellow 
-        $spoCtx = New-Object Microsoft.SharePoint.Client.ClientContext($sSiteUrl)  
+        $spoCtx = New-Object Microsoft.SharePoint.Client.ClientContext($sSiteUrl)
+        $spoCtx.RequestTimeOut = 5000*10000  
         $spoCredentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($sUsername, $sPassword)   
         Write-Host "Initializing spoCredentials" -foregroundcolor Yellow
         $spoCtx.Credentials = $spoCredentials 
         Write-Host "Initializing spoTenant" -foregroundcolor Yellow
         $spoTenant= New-Object Microsoft.Online.SharePoint.TenantAdministration.Tenant($spoCtx) 
-        $spoTenantSiteCollections=$spoTenant.GetSiteProperties(0,$true) 
-        Write-Host "loading spoTenantSiteCollections" -foregroundcolor Yellow
-        $spoCtx.Load($spoTenantSiteCollections) 
-        $spoCtx.ExecuteQuery() 
-         
-        # We need to iterate through the $spoTenantSiteCollections object to get the information of each individual Site Collection 
-        foreach($spoSiteCollection in $spoTenantSiteCollections){ 
-            Write-Host "Site Collection: " $spoSiteCollection.Url 
-           
 
-            $ctx = New-Object Microsoft.SharePoint.Client.ClientContext($spoSiteCollection.Url)
-            $ctx.Credentials = $spoCredentials
-            $ctx.ExecuteQuery()
-            $Web = $ctx.Web 
-            $Site = $ctx.Site
-            $ctx.Load($Web)
-            $ctx.Load($Site)
-            $ctx.ExecuteQuery()   
+        $spoTenantSiteCollections = $null
+        $startIndex = 0
+        $done = $false
+        while(!$done)
+        {
+            $spoTenantSiteCollections=$spoTenant.GetSiteProperties($startIndex,$true) 
+            $spoCtx.Load($spoTenantSiteCollections) 
+             Write-Host "loading spoTenantSiteCollections" -foregroundcolor Yellow
+                for($retryAttempts=0; $retryAttempts -lt $Global:_retryCount; $retryAttempts++){
+                     Try{
+                            $spoCtx.ExecuteQuery()
+                            break
+                        }
+                     Catch [system.exception]{
+                              if($_.Exception.Response.StatusCode -eq 429)
+                              {
+                                Start-Sleep -s $Global:_retryInterval
+                              }
+                              else {
+                                break
+                              }
+                     }
+                 }       
+                    
+            # We need to iterate through the $spoTenantSiteCollections object to get the information of each individual Site Collection 
+            foreach($spoSiteCollection in $spoTenantSiteCollections){ 
+                    Try{
+                    Write-Host "Site Collection: " $spoSiteCollection.Url 
+                    $ctx = New-Object Microsoft.SharePoint.Client.ClientContext($spoSiteCollection.Url)
+                    $ctx.RequestTimeOut = 5000*10000  
+                    $ctx.Credentials = $spoCredentials
+                    for($retryAttempts=0; $retryAttempts -lt $Global:_retryCount; $retryAttempts++){
+                        Try{
+                              $ctx.ExecuteQuery()
+                              break
+                         }
+                         Catch [system.exception]{
+                              if($_.Exception.Response.StatusCode -eq 429)
+                              {
+                                Start-Sleep -s $Global:_retryInterval
+                              }
+                              else {
+                                break
+                                       }
+                     }
+                }
+                    $Web = $ctx.Web 
+                    $Site = $ctx.Site
+                    $ctx.Load($Web)
+                    $ctx.Load($Site)
+                    for($retryAttempts=0; $retryAttempts -lt $Global:_retryCount; $retryAttempts++){
+                        Try{
+                              $ctx.ExecuteQuery()
+                              break
+                         }
+                         Catch [system.exception]{
+                            if($_.Exception.Response.StatusCode -eq 429)
+                              {
+                                Start-Sleep -s $Global:_retryInterval
+                              }
+                              else {
+                                break
+                              }
+                        }
+                     }  
             
-            # get the ShortPoint version from Site collection
-            CheckAndGet-ShortPointVersion -Context $ctx -Site $Site -Web $Web
+                    # get the #ShortPoint version from Site collection
+                    CheckAndGet-ShortPointVersion -Context $ctx -Site $Site -Web $Web
 
-            # get subsites recursivly 
-            Get-SPOSubWebs -Context $ctx -RootWeb $Web
+                    # get subsites recursivly 
+                    Get-SPOSubWebs -Context $ctx -RootWeb $Web
+                    }
+                    Catch [system.exception]{
+                     $SPTempObj = New-Object -TypeName PSObject -Property @{
+                       ID = "" 
+                       Title = ""
+                       Url = $spoSiteCollection.Url
+                       Scope = "Check Failed"
+                       ShortPointVersion = "Check Failed"
+                                              
+                    }
+                    # append temp object to global ShortPoint
+                    $global:outputExcelContent += $SPTempObj
+                    }
+                }
+ 
+                if($spoTenantSiteCollections.count -eq 0)
+                {
+                    $done = $true;
+                }
+                $startIndex += $spoTenantSiteCollections.count
+                
         } 
-        $spoCtx.Dispose() 
+        for($retryAttempts=0; $retryAttempts -lt $Global:_retryCount; $retryAttempts++){
+         Try{
+              $spoCtx.Dispose() 
+              break
+            }
+            Catch [system.exception]{
+                              if($_.Exception.Response.StatusCode -eq 429)
+                              {
+                                Start-Sleep -s $Global:_retryInterval
+                              }
+                              else {
+                                break
+                              }
+                     }
+                     }
+        
     } 
     catch [System.Exception] 
     { 
