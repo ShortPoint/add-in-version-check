@@ -171,16 +171,15 @@ function Get-SPOTenantSiteCollections
         $spoCredentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($sUsername, $sPassword)   
         Write-Host "Initializing spoCredentials" -foregroundcolor Yellow
         $spoCtx.Credentials = $spoCredentials 
-        Write-Host "Initializing spoTenant" -foregroundcolor Yellow
-        $spoTenant= New-Object Microsoft.Online.SharePoint.TenantAdministration.Tenant($spoCtx) 
 
-        $spoTenantSiteCollections = $null
+        Write-Host "Connecting SPO service" -foregroundcolor Yellow
+        $SPOServiceCredentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $sUsername, $sPassword 
+        Connect-SPOService -Url $sSiteUrl -Credential $SPOServiceCredentials 
+        
+
+        $spoTenantSiteCollections = Get-SPOSite
         $startIndex = 0
-        $done = $false
-        while(!$done)
-        {
-            $spoTenantSiteCollections=$spoTenant.GetSiteProperties($startIndex,$true) 
-            $spoCtx.Load($spoTenantSiteCollections) 
+
              Write-Host "loading spoTenantSiteCollections" -foregroundcolor Yellow
                 for($retryAttempts=0; $retryAttempts -lt $Global:_retryCount; $retryAttempts++){
                      Try{
@@ -260,13 +259,6 @@ function Get-SPOTenantSiteCollections
                     }
                 }
  
-                if($spoTenantSiteCollections.count -eq 0)
-                {
-                    $done = $true;
-                }
-                $startIndex += $spoTenantSiteCollections.count
-                
-        } 
         for($retryAttempts=0; $retryAttempts -lt $Global:_retryCount; $retryAttempts++){
          Try{
               $spoCtx.Dispose() 
