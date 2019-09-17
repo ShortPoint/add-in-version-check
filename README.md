@@ -1,4 +1,4 @@
-# ShortPoint Add-in version checker
+# ShortPoint Add-in / SPFx version checker
 PowerShell: Get report of ShortPoint Add-In / SPFx version in your SharePoint Online tenant
 
 # Documentation
