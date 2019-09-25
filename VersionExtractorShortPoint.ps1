@@ -27,8 +27,8 @@
 #>
 param(
 [Parameter(Mandatory=$true,ValueFromPipeline=$true, HelpMessage="SharePoint Online admin site url. Ex: https://shortpoint-admin.sharepoint.com")]$SharePointAdminUrl, 
-[Parameter(Mandatory=$true,ValueFromPipeline=$true, HelpMessage="SharePoint Online admin user name.")][string]$SharePointAdminUser, 
-[Parameter(Mandatory=$true,ValueFromPipeline=$true, HelpMessage="SharePoint Online admin password.")][string]$SharePointAdminPassword, 
+# [Parameter(Mandatory=$true,ValueFromPipeline=$true, HelpMessage="SharePoint Online admin user name.")][string]$SharePointAdminUser, 
+# [Parameter(Mandatory=$true,ValueFromPipeline=$true, HelpMessage="SharePoint Online admin password.")][string]$SharePointAdminPassword, 
 [Parameter(Mandatory=$true,ValueFromPipeline=$true, HelpMessage="Output csv path where you want to export the csv file having details of ShortPoint versions")][string]$CSVExportFilePath,
 [Parameter(Mandatory=$true,ValueFromPipeline=$true, HelpMessage="Path of folder where the SharePoint Online assemblies are located.")][string]$sharePointAssembliesPath)
 
@@ -168,13 +168,13 @@ function Get-SPOTenantSiteCollections
         Write-Host "Initializing spoCtx " + $sSiteUrl -foregroundcolor Yellow 
         $spoCtx = New-Object Microsoft.SharePoint.Client.ClientContext($sSiteUrl)
         $spoCtx.RequestTimeOut = 5000*10000  
-        $spoCredentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($sUsername, $sPassword)   
+        $spoCredentials = Get-Credential   
         Write-Host "Initializing spoCredentials" -foregroundcolor Yellow
         $spoCtx.Credentials = $spoCredentials 
 
         Write-Host "Connecting SPO service" -foregroundcolor Yellow
-        $SPOServiceCredentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $sUsername, $sPassword 
-        Connect-SPOService -Url $sSiteUrl -Credential $SPOServiceCredentials 
+        #$SPOServiceCredentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $sUsername, $sPassword 
+        Connect-SPOService -Url $sSiteUrl -Credential $spoCredentials 
         
 
         $spoTenantSiteCollections = Get-SPOSite
@@ -283,8 +283,7 @@ function Get-SPOTenantSiteCollections
 } 
 
 # Get list of site collections
-$SecurePassword = ConvertTo-SecureString -String $SharePointAdminPassword -AsPlainText -Force
-Get-SPOTenantSiteCollections -sSiteUrl $SharePointAdminUrl -sUserName $SharePointAdminUser -sPassword $SecurePassword 
+Get-SPOTenantSiteCollections -sSiteUrl $SharePointAdminUrl 
 
 # output the file to local path
 $global:outputExcelContent |  Export-Csv -path $CSVExportFilePath -NoTypeInformation
